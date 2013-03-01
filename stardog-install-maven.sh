@@ -6,7 +6,11 @@
 #
 M2_REPO="${M2_REPO:-${HOME}/.m2}"
 script_dir="$(cd $(dirname $0) ; pwd)"
-stardog_libdir=$1
+if [ "$1" == "" ] ; then
+  stardog_libdir="${STARDOG_LIB:-/opt/stardog/lib}"
+else
+  stardog_libdir="$1"
+fi
 stardog_version="${stardog_version:-1.1.2}"
 skip_logging_jars=1
 tmp="${TEMP:-/tmp}"
