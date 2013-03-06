@@ -4,14 +4,40 @@
 #
 # Usage: ./stardog-install-maven.sh STARDOG_LIB
 #
+# Environment variables that are used:
+#
+# HOME
+# M2_REPO         (defaults to ${HOME}/.m2}
+# STARDOG_VERSION (defaults to 1.1.4)
+# STARDOG_LIB     (defaults to various locations see code)
+# TEMP            (defaults to /tmp)
+#
 M2_REPO="${M2_REPO:-${HOME}/.m2}"
 script_dir="$(cd $(dirname $0) ; pwd)"
+stardog_version="${STARDOG_VERSION:-1.1.4}"
 if [ "$1" == "" ] ; then
-  stardog_libdir="${STARDOG_LIB:-/opt/stardog/lib}"
+  if [ ! "${STARDOG_LIB}" == "" ] ; then
+    stardog_libdir="${STARDOG_LIB}"
+  elif [ -d "/opt/stardog-${stardog_version}/lib" ] ; then
+    stardog_libdir="/opt/stardog-${stardog_version}/lib"
+  elif [ -d "/opt/stardog/lib" ] ; then
+    stardog_libdir="/opt/stardog/lib"
+  elif [ -d "${HOME}/Work/stardog-${stardog_version}/lib" ] ; then
+    stardog_libdir="${HOME}/Work/stardog-${stardog_version}/lib"
+  elif [ -d "${HOME}/Work/stardog/lib" ] ; then
+    stardog_libdir="${HOME}/Work/stardog/lib"
+  else
+    echo "ERROR: Specify stardog root directory"
+    exit 1
+  fi
 else
   stardog_libdir="$1"
 fi
-stardog_version="${stardog_version:-1.1.2}"
+echo x="${stardog_libdir}"
+if [ ! -d "${stardog_libdir}" ] ; then
+  echo "ERROR: ${stardog_libdir} does not exist"
+  exit 1
+fi
 skip_logging_jars=1
 tmp="${TEMP:-/tmp}"
 
