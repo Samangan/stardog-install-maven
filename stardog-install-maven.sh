@@ -8,13 +8,13 @@
 #
 # HOME
 # M2_REPO         (defaults to ${HOME}/.m2}
-# STARDOG_VERSION (defaults to 1.1.4)
+# STARDOG_VERSION (defaults to 1.1.5)
 # STARDOG_LIB     (defaults to various locations see code)
 # TEMP            (defaults to /tmp)
 #
 M2_REPO="${M2_REPO:-${HOME}/.m2}"
 script_dir="$(cd $(dirname $0) ; pwd)"
-stardog_version="${STARDOG_VERSION:-1.1.4}"
+stardog_version="${STARDOG_VERSION:-1.1.5}"
 if [ "$1" == "" ] ; then
   if [ ! "${STARDOG_LIB}" == "" ] ; then
     stardog_libdir="${STARDOG_LIB}"
