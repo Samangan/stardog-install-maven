@@ -11,10 +11,16 @@
 # STARDOG_VERSION (defaults to 1.1.5)
 # STARDOG_LIB     (defaults to various locations see code)
 # TEMP            (defaults to /tmp)
+# NEXUS_REPO      (can be specified in the id::layout::url format for instance
+#                  thirdparty::default::http://nexushost/content/repositories/thirdparty
+#                  don't forget to define <server><id>thirdparty</id>..</server>
+#                  in your ~/.m2/settings.xml file)
 #
 M2_REPO="${M2_REPO:-${HOME}/.m2}"
 script_dir="$(cd $(dirname $0) ; pwd)"
 stardog_version="${STARDOG_VERSION:-1.1.5}"
+stardog_project_dir=""
+
 if [ "$1" == "" ] ; then
   if [ ! "${STARDOG_LIB}" == "" ] ; then
     stardog_libdir="${STARDOG_LIB}"
@@ -33,13 +39,12 @@ if [ "$1" == "" ] ; then
 else
   stardog_libdir="$1"
 fi
-echo x="${stardog_libdir}"
 if [ ! -d "${stardog_libdir}" ] ; then
   echo "ERROR: ${stardog_libdir} does not exist"
   exit 1
 fi
 skip_logging_jars=1
-tmp="${TEMP:-/tmp}"
+stardog_tmp_dir="${TEMP:-/tmp}"
 
 if [ "" == "${stardog_libdir}" ] ; then
   if [ -d "${HOME}/Work/stardog-${stardog_version}/lib" ] ; then
@@ -80,6 +85,8 @@ function installJar() {
   local repoJarFile=$4
   local repoFile
   local tmp
+  local stardogJar=0
+  local deployToNexus=0
 
   #
   # artifactId will be empty for the jars in the root lib dir
@@ -89,6 +96,7 @@ function installJar() {
   	if [ ! "${groupId%%-*}" == "stardog" ] ; then
   	  return 0
   	fi
+  	stardogJar=1
     file="${groupId}"
     artifactId="$(basename ${file})"
     artifactId="${artifactId/.jar/}"
@@ -168,6 +176,30 @@ __maven__
 		</dependency>
 __maven__
 
+  if [ ! "${NEXUS_REPO}" == "" ] ; then
+    if ((stardogJar == 1)) ; then
+      deployToNexus=1
+    else
+      case ${artifactId} in
+        data-exporter|empire-*|cp-common-*|json-ld*|airline-*|nquads|jbcrypt|openrdf-*)
+          deployToNexus=1
+          ;;
+      esac
+    fi
+    if ((deployToNexus == 1)) ; then
+      set -x
+      mvn deploy:deploy-file \
+  	    -Dfile=${jar} \
+        -Durl="http${NEXUS_REPO##*http}" \
+  	    -DgroupId=${groupId} \
+        -DartifactId=${artifactId} \
+        -Dversion=${version} \
+        -DupdateReleaseInfo=true \
+        -DrepositoryId="${NEXUS_REPO%%:*}"
+      set +x
+    fi
+  fi
+
   if [ -f "${M2_REPO}/repository/${repoFile}" ] ; then
   	echo "Already installed"
   	return 0
@@ -181,14 +213,22 @@ __maven__
     -Dpackaging=jar
 }
 
+function createStardogProjectDir() {
+  
+  stardog_project_dir="${stardog_tmp_dir}/stardog"
+
+  test -d "${stardog_project_dir}" && rm -rf "${stardog_project_dir}"
+  
+  mkdir -p "${stardog_project_dir}"
+  
+  return $?
+}
+
 function createStardogProject() {
 
   local depFile="$1"
-  local stardogProjectDir="${tmp}/stardog"
-  local stardogPom="${stardogProjectDir}/pom.xml"
+  local stardogPom="${stardog_project_dir}/pom.xml"
 
-  test -d "${stardogProjectDir}" && rm -rf "${stardogProjectDir}"
-  mkdir -p "${stardogProjectDir}"
 
   cat > "${stardogPom}" << __pom__
 <project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
@@ -219,24 +259,40 @@ __pom__
 __pom__
 
    cat "${stardogPom}"
+   
+   return 0
+}
 
-   cd "${stardogProjectDir}"
-   mvn install
+function deploy() {
+
+   cd "${stardog_project_dir}" || return $?
+   
+   if [ "${NEXUS_REPO}" == "" ] ; then
+     echo "NEXUS_REPO not defined so doing a local deploy (aka mvn install)"
+     mvn install
+     return $?
+   fi
+   
+   mvn -X deploy -DaltDeploymentRepository="${NEXUS_REPO}" -DupdateReleaseInfo=true
 }
 
 function main() {
 
-  local depFile="${tmp}/stardog-dependencies.xml"
+  local depFile="${stardog_tmp_dir}/stardog-dependencies.xml"
 
-  rm -f "${depFile}"
-  touch "${depFile}"
+  rm -f "${depFile}" || return $?
+  touch "${depFile}" || return $?
 
   for jar in $(find . -name '*.jar' -type f -print) ; do
     installJar "${depFile}" ${jar}
   done
   #cat "${stardogPom}"
 
-  createStardogProject ${depFile}
+  createStardogProjectDir || return $?
+  createStardogProject ${depFile} || return $?
+  deploy || return $?
+  
+  return 0
 }
 
 main $@
